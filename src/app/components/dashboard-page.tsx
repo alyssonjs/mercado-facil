@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import {
   ShoppingCart,
   DollarSign,
@@ -34,23 +35,41 @@ import {
   Pie,
   Cell,
 } from "recharts";
+import { hasApi, dashboard as apiDashboard } from "../lib/api";
 
 const COLORS = ["#16a34a", "#f97316", "#0ea5e9", "#8b5cf6", "#ef4444"];
 
 export function DashboardPage() {
+  const [apiMetrics, setApiMetrics] = useState<{
+    orders_today: number;
+    revenue_today_cents: number;
+    ticket_medium_cents: number;
+    pending_orders: number;
+    deliveries_in_progress: number;
+    low_stock_products: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (hasApi()) apiDashboard.get().then(setApiMetrics).catch(() => {});
+  }, []);
+
   const todayOrders = orders.filter((o) => o.status !== "cancelado");
   const todayRevenue = todayOrders
     .filter((o) => o.status === "entregue")
     .reduce((sum, o) => sum + o.total, 0);
-  const totalOrdersToday = orders.length;
-  const activeDeliveries = deliveries.filter(
+  const totalOrdersToday = apiMetrics ? apiMetrics.orders_today : orders.length;
+  const activeDeliveries = apiMetrics ? apiMetrics.deliveries_in_progress : deliveries.filter(
     (d) => d.status === "saiu_entrega" || d.status === "atribuida"
   ).length;
-  const avgTicket = todayRevenue / (todayOrders.filter((o) => o.status === "entregue").length || 1);
+  const avgTicket = apiMetrics
+    ? apiMetrics.ticket_medium_cents / 100
+    : todayRevenue / (todayOrders.filter((o) => o.status === "entregue").length || 1);
   const pendingOrders = orders.filter(
     (o) => o.status === "pendente" || o.status === "em_separacao"
   );
-  const lowStockProducts = products.filter((p) => p.stock <= p.minStock);
+  const revenueToday = apiMetrics ? apiMetrics.revenue_today_cents / 100 : todayRevenue;
+  const lowStockCount = apiMetrics ? apiMetrics.low_stock_products : products.filter((p) => p.stock <= p.minStock).length;
+  const lowStockProducts = apiMetrics ? [] : products.filter((p) => p.stock <= p.minStock);
 
   const metrics = [
     {
@@ -63,7 +82,7 @@ export function DashboardPage() {
     },
     {
       label: "Faturamento Hoje",
-      value: formatCurrency(todayRevenue),
+      value: formatCurrency(revenueToday),
       icon: DollarSign,
       change: "+8%",
       color: "text-blue-600",
@@ -238,8 +257,10 @@ export function DashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {lowStockProducts.length === 0 ? (
+            {lowStockCount === 0 ? (
               <p className="text-[13px] text-muted-foreground">Estoque OK</p>
+            ) : lowStockProducts.length === 0 ? (
+              <p className="text-[13px] text-muted-foreground">{lowStockCount} produto(s) com estoque baixo</p>
             ) : (
               <div className="space-y-3">
                 {lowStockProducts.map((p) => (
