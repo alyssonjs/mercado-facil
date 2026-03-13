@@ -6,7 +6,6 @@ import {
   BarChart3,
   Package,
   Users,
-  CheckCircle2,
   ArrowRight,
   Globe,
   Zap,
@@ -61,48 +60,6 @@ export function LandingPage() {
       description:
         "Veja vendas do dia, ticket medio, produtos mais vendidos e pedidos pendentes.",
       color: "text-emerald-600 bg-emerald-50",
-    },
-  ];
-
-  const plans = [
-    {
-      name: "Basico",
-      price: 49,
-      description: "Para quem esta comecando",
-      features: [
-        "Painel administrativo",
-        "Cadastro de produtos",
-        "Cadastro de categorias",
-        "Cadastro de clientes",
-        "Gestao de pedidos",
-      ],
-      highlighted: false,
-    },
-    {
-      name: "Loja Online",
-      price: 79,
-      description: "Venda online e receba pedidos",
-      features: [
-        "Tudo do Basico",
-        "Vitrine online da loja",
-        "Carrinho de compras",
-        "Checkout simples",
-        "Pedidos pelo cliente",
-      ],
-      highlighted: true,
-    },
-    {
-      name: "Completo",
-      price: 119,
-      description: "Operacao completa",
-      features: [
-        "Tudo do Loja Online",
-        "Controle de entregas",
-        "Estoque basico",
-        "Dashboard com metricas",
-        "Bairros com taxas",
-      ],
-      highlighted: false,
     },
   ];
 
@@ -256,70 +213,6 @@ export function LandingPage() {
                   {item.description}
                 </p>
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Pricing */}
-      <section className="py-16 bg-gray-50/50" id="precos">
-        <div className="max-w-6xl mx-auto px-4">
-          <div className="text-center mb-12">
-            <p className="text-[11px] text-primary uppercase tracking-[0.2em] mb-2">Precos</p>
-            <h2 className="text-[28px] text-gray-900">Planos simples e acessiveis</h2>
-            <p className="text-[14px] text-gray-500 mt-2">
-              Comece com 7 dias gratis. Cancele quando quiser.
-            </p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 max-w-4xl mx-auto">
-            {plans.map((plan) => (
-              <Card
-                key={plan.name}
-                className={`relative bg-white ${
-                  plan.highlighted
-                    ? "border-primary border-2 shadow-lg shadow-primary/10"
-                    : "border-gray-100 hover:shadow-md"
-                } transition-all`}
-              >
-                {plan.highlighted && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <Badge className="bg-primary text-primary-foreground text-[10px] rounded-full px-3">
-                      Mais Popular
-                    </Badge>
-                  </div>
-                )}
-                <CardContent className="py-6 text-center">
-                  <h3 className="text-[16px] text-gray-900 mb-1">Plano {plan.name}</h3>
-                  <p className="text-[12px] text-gray-500 mb-4">
-                    {plan.description}
-                  </p>
-                  <div className="mb-5">
-                    <span className="text-[32px] text-primary" style={{ fontFamily: "'DM Sans', sans-serif" }}>
-                      R$ {plan.price}
-                    </span>
-                    <span className="text-[13px] text-gray-500">
-                      /mes
-                    </span>
-                  </div>
-                  <ul className="space-y-2.5 text-left mb-6">
-                    {plan.features.map((f) => (
-                      <li
-                        key={f}
-                        className="flex items-center gap-2 text-[13px] text-gray-700"
-                      >
-                        <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
-                        {f}
-                      </li>
-                    ))}
-                  </ul>
-                  <Button
-                    className="w-full rounded-xl"
-                    variant={plan.highlighted ? "default" : "outline"}
-                  >
-                    Comecar Gratis
-                  </Button>
-                </CardContent>
-              </Card>
             ))}
           </div>
         </div>
