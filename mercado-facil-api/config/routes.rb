@@ -19,7 +19,7 @@ Rails.application.routes.draw do
       resources :neighborhoods, only: [:index, :create, :update, :destroy]
       resources :categories, only: [:index, :create, :update, :destroy]
       resources :products, only: [:index, :create, :show, :update, :destroy]
-      resources :customers, only: [:index, :create, :show, :update]
+      resources :customers, only: [:index, :create, :show, :update, :destroy]
       resources :orders, only: [:index, :create, :show, :update] do
         post :confirm, on: :member
         post :cancel, on: :member

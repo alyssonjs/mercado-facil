@@ -1,37 +1,71 @@
-import { useState } from "react";
-import { Truck, MapPin, Clock, CheckCircle2, User, Search } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { useState, useEffect } from "react";
+import { Truck, MapPin, Clock, CheckCircle2, User } from "lucide-react";
+import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
-import { Input } from "./ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "./ui/select";
 import {
   deliveries as initialDeliveries,
-  formatDateTime,
   formatTime,
   deliveryStatusLabels,
   deliveryStatusColors,
   type Delivery,
   type DeliveryStatus,
 } from "../data/mock-data";
+import { hasApi, deliveries as apiDeliveries } from "../lib/api";
 
-const deliveryPersons = ["Lucas Ferreira", "Rafael Mendes", "Marcos Silva"];
+function mapApiDeliveryToDelivery(d: {
+  id: number;
+  order_id: number;
+  customer_name: string;
+  address: string;
+  neighborhood: string;
+  delivery_user_name: string | null;
+  status: string;
+  assigned_at: string | null;
+  delivered_at: string | null;
+  notes: string | null;
+}): Delivery {
+  return {
+    id: String(d.id),
+    orderId: String(d.order_id),
+    customerName: d.customer_name,
+    address: d.address,
+    neighborhood: d.neighborhood,
+    deliveryPerson: d.delivery_user_name ?? "—",
+    status: (d.status as DeliveryStatus) ?? "atribuida",
+    assignedAt: d.assigned_at ?? new Date().toISOString(),
+    deliveredAt: d.delivered_at ?? undefined,
+    notes: d.notes ?? "",
+  };
+}
 
 export function DeliveriesPage() {
   const [deliveriesList, setDeliveriesList] = useState<Delivery[]>(initialDeliveries);
   const [statusFilter, setStatusFilter] = useState("all");
 
+  const loadData = () => {
+    if (!hasApi()) return;
+    apiDeliveries.list(statusFilter === "all" ? undefined : statusFilter).then((list) => {
+      setDeliveriesList(list.map(mapApiDeliveryToDelivery));
+    }).catch(() => {});
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [statusFilter]);
+
   const filtered = deliveriesList.filter(
     (d) => statusFilter === "all" || d.status === statusFilter
   );
 
-  const updateStatus = (id: string, newStatus: DeliveryStatus) => {
+  const updateStatus = async (id: string, newStatus: DeliveryStatus) => {
+    if (hasApi()) {
+      try {
+        await apiDeliveries.changeStatus(Number(id), newStatus);
+        loadData();
+      } catch {}
+      return;
+    }
     setDeliveriesList((prev) =>
       prev.map((d) => {
         if (d.id !== id) return d;

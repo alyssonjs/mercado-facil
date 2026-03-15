@@ -141,29 +141,33 @@ export const customers = {
   create: (data: Record<string, unknown>) => request("/api/v1/customers", { method: "POST", body: JSON.stringify(data) }),
   update: (id: number, data: Record<string, unknown>) =>
     request(`/api/v1/customers/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
+  delete: (id: number) => request(`/api/v1/customers/${id}`, { method: "DELETE" }),
+};
+
+export type ApiOrder = {
+  id: number;
+  customer_id: number;
+  customer_name: string;
+  source: string;
+  status: string;
+  payment_method: string;
+  subtotal_cents: number;
+  delivery_fee_cents: number;
+  total_cents: number;
+  change_for_cents: number;
+  notes: string | null;
+  neighborhood_snapshot: string | null;
+  ordered_at: string | null;
+  confirmed_at: string | null;
+  delivered_at: string | null;
+  created_at: string;
+  items?: { product_name_snapshot: string; quantity: number; unit_type: string; total_price_cents: number }[];
 };
 
 export const orders = {
   list: (status?: string) =>
-    request<{
-      id: number;
-      customer_id: number;
-      customer_name: string;
-      source: string;
-      status: string;
-      payment_method: string;
-      subtotal_cents: number;
-      delivery_fee_cents: number;
-      total_cents: number;
-      change_for_cents: number;
-      notes: string | null;
-      neighborhood_snapshot: string | null;
-      ordered_at: string | null;
-      confirmed_at: string | null;
-      delivered_at: string | null;
-      created_at: string;
-    }[]>(`/api/v1/orders${status ? `?status=${encodeURIComponent(status)}` : ""}`),
-  get: (id: number) => request(`/api/v1/orders/${id}`),
+    request<ApiOrder[]>(`/api/v1/orders${status ? `?status=${encodeURIComponent(status)}` : ""}`),
+  get: (id: number) => request<ApiOrder>(`/api/v1/orders/${id}`),
   create: (data: Record<string, unknown>) => request("/api/v1/orders", { method: "POST", body: JSON.stringify(data) }),
   confirm: (id: number) => request(`/api/v1/orders/${id}/confirm`, { method: "POST" }),
   cancel: (id: number) => request(`/api/v1/orders/${id}/cancel`, { method: "POST" }),

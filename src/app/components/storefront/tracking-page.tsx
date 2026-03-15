@@ -25,6 +25,7 @@ import {
   type Order,
   type OrderStatus,
 } from "../../data/mock-data";
+import { hasApi, tracking as apiTracking } from "../../lib/api";
 
 const statusSteps: { status: OrderStatus; icon: typeof Clock; label: string }[] = [
   { status: "pendente", icon: Clock, label: "Pendente" },
@@ -40,19 +41,58 @@ function getStepIndex(status: OrderStatus): number {
   return statusSteps.findIndex((s) => s.status === status);
 }
 
+type TrackingResult = Order | null | "not_found";
+
 export function TrackingPage() {
   const [phone, setPhone] = useState("");
   const [orderCode, setOrderCode] = useState("");
-  const [result, setResult] = useState<Order | null | "not_found">(null);
+  const [result, setResult] = useState<TrackingResult>(null);
   const [searched, setSearched] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleSearch = () => {
-    if (!orderCode) return;
-    const found = orders.find(
-      (o) => o.id.toLowerCase() === orderCode.toLowerCase()
-    );
-    setResult(found || "not_found");
+  const handleSearch = async () => {
+    if (!orderCode.trim()) return;
     setSearched(true);
+    setLoading(true);
+    setResult(null);
+    try {
+      if (hasApi()) {
+        const data = await apiTracking.order(orderCode.trim(), phone.trim());
+        const mapped: Order = {
+          id: String(data.order_id),
+          customerId: "",
+          customerName: "",
+          items: data.items.map((i) => ({
+            productId: "",
+            productName: i.product_name,
+            quantity: i.quantity,
+            unitPrice: i.total_price_cents / 100 / i.quantity,
+            totalPrice: i.total_price_cents / 100,
+            unitType: "un",
+          })),
+          subtotal: data.items.reduce((s, i) => s + i.total_price_cents / 100, 0),
+          deliveryFee: data.total_cents / 100 - data.items.reduce((s, i) => s + i.total_price_cents / 100, 0),
+          total: data.total_cents / 100,
+          paymentMethod: "",
+          status: data.status as OrderStatus,
+          source: "marketplace",
+          notes: "",
+          address: "",
+          neighborhood: "",
+          createdAt: data.created_at,
+        };
+        setResult(mapped);
+      } else {
+        const found = orders.find(
+          (o) => o.id.toLowerCase() === orderCode.trim().toLowerCase()
+        );
+        setResult(found || "not_found");
+      }
+    } catch {
+      setResult("not_found");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const currentStep = result && result !== "not_found" ? getStepIndex(result.status) : -1;
@@ -102,9 +142,9 @@ export function TrackingPage() {
                 placeholder="(11) 99999-9999"
               />
             </div>
-            <Button className="w-full gap-2" onClick={handleSearch}>
+            <Button className="w-full gap-2" onClick={handleSearch} disabled={loading}>
               <Search className="w-4 h-4" />
-              Buscar Pedido
+              {loading ? "Buscando..." : "Buscar Pedido"}
             </Button>
           </CardContent>
         </Card>

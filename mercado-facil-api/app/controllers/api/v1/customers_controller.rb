@@ -32,6 +32,12 @@ module Api
         end
       end
 
+      def destroy
+        c = current_store.customers.find(params[:id])
+        c.destroy!
+        head :no_content
+      end
+
       private
 
       def customer_params

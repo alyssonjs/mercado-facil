@@ -1,14 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Store,
   MapPin,
   Clock,
-  DollarSign,
   Save,
   Users,
   Plus,
   Trash2,
-  Shield,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
@@ -32,6 +30,7 @@ import {
 } from "./ui/dialog";
 import { toast } from "sonner";
 import { Toaster } from "./ui/sonner";
+import { hasApi, store as apiStore, storeSettings as apiStoreSettings } from "../lib/api";
 
 interface StoreUser {
   id: string;
@@ -61,7 +60,6 @@ const roleColors: Record<string, string> = {
 };
 
 export function SettingsPage() {
-  // Store settings
   const [storeName, setStoreName] = useState("Mercearia do Bairro");
   const [storePhone, setStorePhone] = useState("(11) 3456-7890");
   const [storeAddress, setStoreAddress] = useState("Rua Principal, 100 - Centro");
@@ -69,15 +67,45 @@ export function SettingsPage() {
   const [neighborhoods, setNeighborhoods] = useState("Centro, Jardim America, Vila Nova, Bela Vista");
   const [openHours, setOpenHours] = useState("07:00");
   const [closeHours, setCloseHours] = useState("20:00");
+  const [savingStore, setSavingStore] = useState(false);
 
-  // Users
   const [users, setUsers] = useState<StoreUser[]>(initialUsers);
   const [userDialogOpen, setUserDialogOpen] = useState(false);
   const [formUserName, setFormUserName] = useState("");
   const [formUserEmail, setFormUserEmail] = useState("");
   const [formUserRole, setFormUserRole] = useState<"admin" | "atendente" | "entregador">("atendente");
 
-  const handleSaveStore = () => {
+  useEffect(() => {
+    if (!hasApi()) return;
+    Promise.all([apiStore.get(), apiStoreSettings.get()]).then(([storeData, settingsData]) => {
+      setStoreName(storeData.name);
+      setStorePhone(storeData.phone ?? "");
+      setStoreAddress(storeData.address ?? "");
+      setDeliveryFee(String((settingsData.default_delivery_fee_cents ?? 500) / 100));
+      setOpenHours((settingsData.opening_hours as string) ?? "07:00");
+      setCloseHours((settingsData.closing_hours as string) ?? "20:00");
+    }).catch(() => {});
+  }, []);
+
+  const handleSaveStore = async () => {
+    if (hasApi()) {
+      setSavingStore(true);
+      try {
+        await apiStore.update({ name: storeName, phone: storePhone, address: storeAddress });
+        await apiStoreSettings.update({
+          default_delivery_fee_cents: Math.round(parseFloat(deliveryFee) * 100),
+          opening_hours: openHours,
+          closing_hours: closeHours,
+        });
+        toast.success("Configuracoes da loja salvas com sucesso!");
+      } catch {
+        toast.error("Erro ao salvar. Tente novamente.");
+        setSavingStore(false);
+      } finally {
+        setSavingStore(false);
+      }
+      return;
+    }
     toast.success("Configuracoes da loja salvas com sucesso!");
   };
 
@@ -208,9 +236,9 @@ export function SettingsPage() {
             </Card>
           </div>
 
-          <Button onClick={handleSaveStore} className="mt-4 gap-2">
+          <Button onClick={handleSaveStore} className="mt-4 gap-2" disabled={savingStore}>
             <Save className="w-4 h-4" />
-            Salvar Configuracoes
+            {savingStore ? "Salvando..." : "Salvar Configuracoes"}
           </Button>
         </TabsContent>
 
