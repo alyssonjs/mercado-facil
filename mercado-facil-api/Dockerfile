@@ -12,7 +12,6 @@ WORKDIR /app
 
 COPY Gemfile Gemfile.lock ./
 RUN gem install bundler -v 4.0.3 && \
-    bundle _4.0.3_ config set --local without 'development test' && \
     bundle _4.0.3_ install -j4 --retry 3
 
 COPY . .
