@@ -15,17 +15,12 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Card, CardContent } from "../ui/card";
 import { Badge } from "../ui/badge";
-import {
-  orders,
-  storeSettings,
-  formatCurrency,
-  formatDateTime,
-  statusLabels,
-  statusColors,
-  type Order,
-  type OrderStatus,
-} from "../../data/mock-data";
+import { formatCurrency, formatDateTime } from "../../lib/format";
+import { statusLabels, statusColors } from "../../lib/status-maps";
+import type { Order, OrderStatus } from "../../lib/types";
 import { hasApi, tracking as apiTracking } from "../../lib/api";
+
+const DEMO_STORE_SLUG = import.meta.env.VITE_DEMO_STORE_SLUG ?? "mercado-boa-vista";
 
 const statusSteps: { status: OrderStatus; icon: typeof Clock; label: string }[] = [
   { status: "pendente", icon: Clock, label: "Pendente" },
@@ -83,10 +78,7 @@ export function TrackingPage() {
         };
         setResult(mapped);
       } else {
-        const found = orders.find(
-          (o) => o.id.toLowerCase() === orderCode.trim().toLowerCase()
-        );
-        setResult(found || "not_found");
+        setResult("not_found");
       }
     } catch {
       setResult("not_found");
@@ -102,11 +94,11 @@ export function TrackingPage() {
       {/* Header */}
       <header className="bg-white border-b border-gray-100 shadow-sm">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
-          <Link to={`/loja/${storeSettings.slug}`} className="flex items-center gap-2">
+          <Link to={`/loja/${DEMO_STORE_SLUG}`} className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
               <Store className="w-4 h-4 text-primary-foreground" />
             </div>
-            <span className="text-[14px]" style={{ fontFamily: "'DM Sans', sans-serif" }}>Mercado Boa Vista</span>
+            <span className="text-[14px]" style={{ fontFamily: "'DM Sans', sans-serif" }}>Voltar à Loja</span>
           </Link>
         </div>
       </header>

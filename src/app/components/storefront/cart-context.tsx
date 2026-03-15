@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, type ReactNode } from "react";
-import type { Product, CartItem } from "../../data/mock-data";
+import type { Product, CartItem } from "../../lib/types";
 
 interface CartContextType {
   items: CartItem[];

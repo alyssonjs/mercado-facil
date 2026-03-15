@@ -35,12 +35,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
-import {
-  products as initialProducts,
-  categories as mockCategories,
-  formatCurrency,
-  type Product,
-} from "../data/mock-data";
+import { formatCurrency } from "../lib/format";
+import type { Product } from "../lib/types";
 import { hasApi, products as apiProducts, categories as apiCategories } from "../lib/api";
 
 function mapApiProductToProduct(p: {
@@ -75,8 +71,8 @@ function mapApiProductToProduct(p: {
 }
 
 export function ProductsPage() {
-  const [productsList, setProductsList] = useState<Product[]>(initialProducts);
-  const [categoriesList, setCategoriesList] = useState<string[]>(mockCategories);
+  const [productsList, setProductsList] = useState<Product[]>([]);
+  const [categoriesList, setCategoriesList] = useState<string[]>([]);
   const [categoriesWithId, setCategoriesWithId] = useState<{ id: number; name: string }[]>([]);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -382,7 +378,7 @@ export function ProductsPage() {
                 <Select value={formCategory} onValueChange={setFormCategory}>
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>
-                    {categories.map((c) => (
+                    {categoriesList.map((c) => (
                       <SelectItem key={c} value={c}>{c}</SelectItem>
                     ))}
                   </SelectContent>

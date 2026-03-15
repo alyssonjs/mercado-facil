@@ -15,7 +15,9 @@ import {
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
 import { Badge } from "./ui/badge";
-import { storeSettings, formatCurrency } from "../data/mock-data";
+import { formatCurrency } from "../lib/format";
+
+const DEMO_STORE_SLUG = import.meta.env.VITE_DEMO_STORE_SLUG ?? "mercado-boa-vista";
 
 export function LandingPage() {
   const features = [
@@ -77,7 +79,7 @@ export function LandingPage() {
             </span>
           </Link>
           <div className="flex items-center gap-3">
-            <Link to={`/loja/${storeSettings.slug}`}>
+            <Link to={`/loja/${DEMO_STORE_SLUG}`}>
               <Button variant="ghost" size="sm">
                 Ver Loja Demo
               </Button>
@@ -112,7 +114,7 @@ export function LandingPage() {
             Simples, acessivel e feito para o comercio do bairro.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mt-9">
-            <Link to={`/loja/${storeSettings.slug}`}>
+            <Link to={`/loja/${DEMO_STORE_SLUG}`}>
               <Button size="lg" className="gap-2 rounded-xl shadow-md shadow-primary/20 px-6">
                 <ShoppingBag className="w-4 h-4" />
                 Ver Loja Demo
@@ -240,7 +242,7 @@ export function LandingPage() {
                   <ArrowRight className="w-4 h-4" />
                 </Button>
               </Link>
-              <Link to={`/loja/${storeSettings.slug}`}>
+              <Link to={`/loja/${DEMO_STORE_SLUG}`}>
                 <Button
                   size="lg"
                   variant="outline"

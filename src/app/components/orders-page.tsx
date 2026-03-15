@@ -25,18 +25,9 @@ import {
   DialogFooter,
 } from "./ui/dialog";
 import { Label } from "./ui/label";
-import {
-  orders as initialOrders,
-  products as mockProducts,
-  customers as mockCustomers,
-  formatCurrency,
-  formatDateTime,
-  statusLabels,
-  statusColors,
-  type Order,
-  type OrderStatus,
-  type OrderItem,
-} from "../data/mock-data";
+import { formatCurrency } from "../lib/format";
+import { statusLabels, statusColors } from "../lib/status-maps";
+import type { Order, OrderStatus, OrderItem, Product, Customer } from "../lib/types";
 import { hasApi, orders as apiOrders, products as apiProducts, customers as apiCustomers, type ApiOrder } from "../lib/api";
 
 const statusFlow: OrderStatus[] = [
@@ -76,10 +67,10 @@ function mapApiOrderToOrder(o: ApiOrder): Order {
 }
 
 export function OrdersPage() {
-  const [ordersList, setOrdersList] = useState<Order[]>(initialOrders);
+  const [ordersList, setOrdersList] = useState<Order[]>([]);
   const [orderDetails, setOrderDetails] = useState<Record<string, Order>>({});
-  const [productsList, setProductsList] = useState(mockProducts);
-  const [customersList, setCustomersList] = useState(mockCustomers);
+  const [productsList, setProductsList] = useState<Product[]>([]);
+  const [customersList, setCustomersList] = useState<Customer[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);

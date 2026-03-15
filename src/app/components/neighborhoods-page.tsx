@@ -21,15 +21,12 @@ import {
   TableHeader,
   TableRow,
 } from "./ui/table";
-import {
-  neighborhoods as initialNeighborhoods,
-  formatCurrency,
-  type Neighborhood,
-} from "../data/mock-data";
+import { formatCurrency } from "../lib/format";
+import type { Neighborhood } from "../lib/types";
 import { hasApi, neighborhoods as apiNeighborhoods } from "../lib/api";
 
 export function NeighborhoodsPage() {
-  const [list, setList] = useState<Neighborhood[]>(initialNeighborhoods);
+  const [list, setList] = useState<Neighborhood[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Neighborhood | null>(null);
   const [formName, setFormName] = useState("");

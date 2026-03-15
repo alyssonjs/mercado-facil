@@ -3,14 +3,9 @@ import { Truck, MapPin, Clock, CheckCircle2, User } from "lucide-react";
 import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
-import {
-  deliveries as initialDeliveries,
-  formatTime,
-  deliveryStatusLabels,
-  deliveryStatusColors,
-  type Delivery,
-  type DeliveryStatus,
-} from "../data/mock-data";
+import { formatTime } from "../lib/format";
+import { deliveryStatusLabels, deliveryStatusColors } from "../lib/status-maps";
+import type { Delivery, DeliveryStatus } from "../lib/types";
 import { hasApi, deliveries as apiDeliveries } from "../lib/api";
 
 function mapApiDeliveryToDelivery(d: {
@@ -40,7 +35,7 @@ function mapApiDeliveryToDelivery(d: {
 }
 
 export function DeliveriesPage() {
-  const [deliveriesList, setDeliveriesList] = useState<Delivery[]>(initialDeliveries);
+  const [deliveriesList, setDeliveriesList] = useState<Delivery[]>([]);
   const [statusFilter, setStatusFilter] = useState("all");
 
   const loadData = () => {

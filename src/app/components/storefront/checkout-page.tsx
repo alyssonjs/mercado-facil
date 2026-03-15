@@ -13,23 +13,14 @@ import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Card, CardContent } from "../ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
 import { useCart } from "./cart-context";
-import {
-  storeSettings,
-  neighborhoods,
-  formatCurrency,
-} from "../../data/mock-data";
+import { useStorefront } from "./storefront-context";
+import { formatCurrency } from "../../lib/format";
 import { hasApi, storefront } from "../../lib/api";
 
 export function CheckoutPage() {
   const { slug } = useParams<{ slug: string }>();
+  const { data: storefrontData } = useStorefront();
   const { items, subtotal, clearCart } = useCart();
   const navigate = useNavigate();
 
@@ -37,7 +28,7 @@ export function CheckoutPage() {
   const [phone, setPhone] = useState("");
   const [address, setAddress] = useState("");
   const [complement, setComplement] = useState("");
-  const [selectedNeighborhood, setSelectedNeighborhood] = useState("");
+  const [neighborhoodName, setNeighborhoodName] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
   const [changeFor, setChangeFor] = useState("");
   const [notes, setNotes] = useState("");
@@ -47,55 +38,47 @@ export function CheckoutPage() {
   const [apiDeliveryFeeCents, setApiDeliveryFeeCents] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const activeNeighborhoods = neighborhoods.filter((n) => n.active);
-  const neighborhood = activeNeighborhoods.find((n) => n.id === selectedNeighborhood);
-  const neighborhoodName = neighborhood?.name ?? selectedNeighborhood;
-  const deliveryFeeFromMock = neighborhood?.deliveryFee ?? 0;
   const deliveryFee = hasApi() && slug && apiDeliveryFeeCents !== null
     ? apiDeliveryFeeCents / 100
-    : deliveryFeeFromMock;
+    : 0;
   const total = subtotal + deliveryFee;
 
   useEffect(() => {
-    if (!hasApi() || !slug || !neighborhoodName) {
+    if (!hasApi() || !slug || !neighborhoodName.trim()) {
       setApiDeliveryFeeCents(null);
       return;
     }
-    storefront.calculateDelivery(slug, neighborhoodName).then((r) => setApiDeliveryFeeCents(r.delivery_fee_cents)).catch(() => setApiDeliveryFeeCents(0));
+    storefront.calculateDelivery(slug, neighborhoodName.trim()).then((r) => setApiDeliveryFeeCents(r.delivery_fee_cents)).catch(() => setApiDeliveryFeeCents(0));
   }, [slug, neighborhoodName]);
 
   const canSubmit =
-    name && phone && address && selectedNeighborhood && paymentMethod && items.length > 0;
+    name && phone && address && neighborhoodName.trim() && paymentMethod && items.length > 0;
 
-  const storeSlug = slug ?? storeSettings.slug;
+  const storeSlug = slug ?? storefrontData?.store?.slug ?? "";
+  const deliveryTimeMinutes = (storefrontData?.settings?.delivery_time_minutes as number) ?? 40;
+  const acceptsCash = (storefrontData?.settings?.accepts_cash as boolean) ?? true;
+  const acceptsPix = (storefrontData?.settings?.accepts_pix as boolean) ?? true;
+  const acceptsCardOnDelivery = (storefrontData?.settings?.accepts_card_on_delivery as boolean) ?? true;
 
   const handleSubmit = async () => {
-    if (!canSubmit) return;
+    if (!canSubmit || !hasApi() || !slug) return;
     setSubmitting(true);
     try {
-      if (hasApi() && slug) {
-        const res = await storefront.checkout(slug, {
-          name,
-          phone,
-          address: complement ? `${address}, ${complement}` : address,
-          neighborhood: neighborhoodName,
-          payment_method: paymentMethod,
-          delivery_fee_cents: Math.round(deliveryFee * 100),
-          change_for_cents: changeFor ? Math.round(parseFloat(changeFor) * 100) : undefined,
-          notes: notes || undefined,
-          items: items.map((i) => ({ product_id: Number(i.product.id), quantity: i.quantity })),
-        });
-        setOrderId(String(res.order_id));
-        setConfirmTotal(res.total_cents / 100);
-        setSubmitted(true);
-        clearCart();
-      } else {
-        const id = `ORD-${String(Math.floor(Math.random() * 9000) + 1000)}`;
-        setOrderId(id);
-        setConfirmTotal(total);
-        setSubmitted(true);
-        clearCart();
-      }
+      const res = await storefront.checkout(slug, {
+        name,
+        phone,
+        address: complement ? `${address}, ${complement}` : address,
+        neighborhood: neighborhoodName.trim(),
+        payment_method: paymentMethod,
+        delivery_fee_cents: Math.round(deliveryFee * 100),
+        change_for_cents: changeFor ? Math.round(parseFloat(changeFor) * 100) : undefined,
+        notes: notes || undefined,
+        items: items.map((i) => ({ product_id: Number(i.product.id), quantity: i.quantity })),
+      });
+      setOrderId(String(res.order_id));
+      setConfirmTotal(res.total_cents / 100);
+      setSubmitted(true);
+      clearCart();
     } catch {
       setSubmitting(false);
     } finally {
@@ -114,7 +97,7 @@ export function CheckoutPage() {
           Seu pedido <span className="text-foreground">{orderId}</span> foi recebido com sucesso.
         </p>
         <p className="text-[13px] text-muted-foreground mb-6">
-          Tempo estimado de entrega: ~{storeSettings.deliveryTimeMinutes} minutos
+          Tempo estimado de entrega: ~{deliveryTimeMinutes} minutos
         </p>
 
         <Card className="max-w-sm w-full mb-6">
@@ -209,21 +192,11 @@ export function CheckoutPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <Label>Bairro</Label>
-                  <Select
-                    value={selectedNeighborhood}
-                    onValueChange={setSelectedNeighborhood}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione seu bairro" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {activeNeighborhoods.map((n) => (
-                        <SelectItem key={n.id} value={n.id}>
-                          {n.name} - Taxa: {formatCurrency(n.deliveryFee)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    value={neighborhoodName}
+                    onChange={(e) => setNeighborhoodName(e.target.value)}
+                    placeholder="Ex: Centro, Vila Nova"
+                  />
                 </div>
                 <div>
                   <Label>Complemento</Label>
@@ -245,7 +218,7 @@ export function CheckoutPage() {
                 Forma de Pagamento
               </h3>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {storeSettings.acceptsCash && (
+                {acceptsCash && (
                   <button
                     onClick={() => setPaymentMethod("Dinheiro")}
                     className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-colors ${
@@ -258,7 +231,7 @@ export function CheckoutPage() {
                     <span className="text-[13px]">Dinheiro</span>
                   </button>
                 )}
-                {storeSettings.acceptsPix && (
+                {acceptsPix && (
                   <button
                     onClick={() => setPaymentMethod("PIX")}
                     className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-colors ${
@@ -271,7 +244,7 @@ export function CheckoutPage() {
                     <span className="text-[13px]">PIX</span>
                   </button>
                 )}
-                {storeSettings.acceptsCardOnDelivery && (
+                {acceptsCardOnDelivery && (
                   <button
                     onClick={() => setPaymentMethod("Cartao")}
                     className={`flex items-center gap-3 p-4 rounded-xl border-2 transition-colors ${
@@ -337,9 +310,9 @@ export function CheckoutPage() {
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Entrega</span>
                   <span>
-                    {selectedNeighborhood
+                    {neighborhoodName.trim()
                       ? formatCurrency(deliveryFee)
-                      : "Selecione o bairro"}
+                      : "Informe o bairro"}
                   </span>
                 </div>
               </div>
@@ -353,7 +326,7 @@ export function CheckoutPage() {
 
               <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
                 <Truck className="w-3.5 h-3.5" />
-                Entrega em ~{storeSettings.deliveryTimeMinutes} min
+                Entrega em ~{deliveryTimeMinutes} min
               </div>
 
               <Button

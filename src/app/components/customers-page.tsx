@@ -11,7 +11,7 @@ import {
   DialogFooter,
 } from "./ui/dialog";
 import { Label } from "./ui/label";
-import { customers as initialCustomers, type Customer } from "../data/mock-data";
+import type { Customer } from "../lib/types";
 import { hasApi, customers as apiCustomers } from "../lib/api";
 
 function mapApiCustomerToCustomer(c: {
@@ -38,7 +38,7 @@ function mapApiCustomerToCustomer(c: {
 }
 
 export function CustomersPage() {
-  const [customersList, setCustomersList] = useState<Customer[]>(initialCustomers);
+  const [customersList, setCustomersList] = useState<Customer[]>([]);
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Customer | null>(null);

@@ -4,40 +4,42 @@ import {
   DollarSign,
   Truck,
   TrendingUp,
-  UserPlus,
   AlertTriangle,
   Clock,
   ArrowUpRight,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
-import {
-  orders,
-  products,
-  deliveries,
-  formatCurrency,
-  formatTime,
-  statusLabels,
-  statusColors,
-  weekSalesData,
-  topProductsData,
-  neighborhoodData,
-} from "../data/mock-data";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-} from "recharts";
-import { hasApi, dashboard as apiDashboard } from "../lib/api";
+import { formatCurrency, formatTime } from "../lib/format";
+import { statusLabels, statusColors } from "../lib/status-maps";
+import type { Order } from "../lib/types";
+import { hasApi, dashboard as apiDashboard, orders as apiOrders, inventory as apiInventory, type ApiOrder } from "../lib/api";
 
-const COLORS = ["#16a34a", "#f97316", "#0ea5e9", "#8b5cf6", "#ef4444"];
+function mapApiOrderToOrder(o: ApiOrder): Order {
+  return {
+    id: String(o.id),
+    customerId: String(o.customer_id),
+    customerName: o.customer_name,
+    items: (o.items ?? []).map((i) => ({
+      productId: "",
+      productName: i.product_name_snapshot,
+      quantity: i.quantity,
+      unitPrice: i.total_price_cents / 100 / i.quantity,
+      totalPrice: i.total_price_cents / 100,
+      unitType: i.unit_type ?? "un",
+    })),
+    subtotal: o.subtotal_cents / 100,
+    deliveryFee: o.delivery_fee_cents / 100,
+    total: o.total_cents / 100,
+    paymentMethod: o.payment_method ?? "",
+    status: (o.status as Order["status"]) ?? "pendente",
+    source: o.source === "marketplace" ? "marketplace" : "admin",
+    notes: o.notes ?? "",
+    address: "",
+    neighborhood: o.neighborhood_snapshot ?? "",
+    createdAt: o.ordered_at ?? o.created_at ?? new Date().toISOString(),
+  };
+}
 
 export function DashboardPage() {
   const [apiMetrics, setApiMetrics] = useState<{
@@ -48,35 +50,43 @@ export function DashboardPage() {
     deliveries_in_progress: number;
     low_stock_products: number;
   } | null>(null);
+  const [pendingOrders, setPendingOrders] = useState<Order[]>([]);
+  const [lowStockProducts, setLowStockProducts] = useState<{ id: number; name: string; slug: string; stock_quantity: number; minimum_stock_alert: number; low_stock: boolean }[]>([]);
 
   useEffect(() => {
-    if (hasApi()) apiDashboard.get().then(setApiMetrics).catch(() => {});
+    if (!hasApi()) return;
+    apiDashboard.get().then(setApiMetrics).catch(() => {});
   }, []);
 
-  const todayOrders = orders.filter((o) => o.status !== "cancelado");
-  const todayRevenue = todayOrders
-    .filter((o) => o.status === "entregue")
-    .reduce((sum, o) => sum + o.total, 0);
-  const totalOrdersToday = apiMetrics ? apiMetrics.orders_today : orders.length;
-  const activeDeliveries = apiMetrics ? apiMetrics.deliveries_in_progress : deliveries.filter(
-    (d) => d.status === "saiu_entrega" || d.status === "atribuida"
-  ).length;
-  const avgTicket = apiMetrics
-    ? apiMetrics.ticket_medium_cents / 100
-    : todayRevenue / (todayOrders.filter((o) => o.status === "entregue").length || 1);
-  const pendingOrders = orders.filter(
-    (o) => o.status === "pendente" || o.status === "em_separacao"
-  );
-  const revenueToday = apiMetrics ? apiMetrics.revenue_today_cents / 100 : todayRevenue;
-  const lowStockCount = apiMetrics ? apiMetrics.low_stock_products : products.filter((p) => p.stock <= p.minStock).length;
-  const lowStockProducts = apiMetrics ? [] : products.filter((p) => p.stock <= p.minStock);
+  useEffect(() => {
+    if (!hasApi()) return;
+    Promise.all([
+      apiOrders.list("pendente").catch(() => []),
+      apiOrders.list("em_separacao").catch(() => []),
+    ]).then(([pend, sep]) => {
+      setPendingOrders([...pend.map(mapApiOrderToOrder), ...sep.map(mapApiOrderToOrder)]);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!hasApi()) return;
+    apiInventory.list().then((list) => {
+      setLowStockProducts(list.filter((p) => p.low_stock));
+    }).catch(() => {});
+  }, []);
+
+  const totalOrdersToday = apiMetrics?.orders_today ?? 0;
+  const revenueToday = apiMetrics ? apiMetrics.revenue_today_cents / 100 : 0;
+  const activeDeliveries = apiMetrics?.deliveries_in_progress ?? 0;
+  const avgTicket = apiMetrics ? apiMetrics.ticket_medium_cents / 100 : 0;
+  const lowStockCount = apiMetrics?.low_stock_products ?? lowStockProducts.length;
 
   const metrics = [
     {
       label: "Pedidos Hoje",
       value: totalOrdersToday.toString(),
       icon: ShoppingCart,
-      change: "+12%",
+      change: "",
       color: "text-green-600",
       bg: "bg-green-50",
     },
@@ -84,7 +94,7 @@ export function DashboardPage() {
       label: "Faturamento Hoje",
       value: formatCurrency(revenueToday),
       icon: DollarSign,
-      change: "+8%",
+      change: "",
       color: "text-blue-600",
       bg: "bg-blue-50",
     },
@@ -100,7 +110,7 @@ export function DashboardPage() {
       label: "Ticket Medio",
       value: formatCurrency(avgTicket),
       icon: TrendingUp,
-      change: "+5%",
+      change: "",
       color: "text-purple-600",
       bg: "bg-purple-50",
     },
@@ -108,15 +118,13 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Page header */}
       <div>
         <h1>Dashboard</h1>
         <p className="text-muted-foreground text-[14px] mt-1">
-          Visao geral do Mercado Boa Vista hoje, 13 de marco de 2026
+          Visao geral do dia
         </p>
       </div>
 
-      {/* Metric cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {metrics.map((m) => (
           <Card key={m.label} className="gap-4 py-5">
@@ -139,78 +147,9 @@ export function DashboardPage() {
         ))}
       </div>
 
-      {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Sales chart */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-[15px]">Vendas nos Ultimos 7 Dias</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[240px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={weekSalesData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="day" fontSize={12} tickLine={false} axisLine={false} stroke="#94a3b8" />
-                  <YAxis fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v}`} stroke="#94a3b8" />
-                  <Tooltip
-                    formatter={(value: number) => [formatCurrency(value), "Vendas"]}
-                    contentStyle={{ borderRadius: "8px", border: "1px solid #e2e8f0", background: "#fff", color: "#1a1e2c" }}
-                  />
-                  <Bar dataKey="vendas" fill="#16a34a" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Top products */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card>
-          <CardHeader>
-            <CardTitle className="text-[15px]">Mais Vendidos</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="h-[240px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={topProductsData}
-                    dataKey="vendas"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={80}
-                    innerRadius={40}
-                  >
-                    {topProductsData.map((_, i) => (
-                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="space-y-1.5 mt-2">
-              {topProductsData.map((p, i) => (
-                <div key={p.name} className="flex items-center gap-2 text-[12px]">
-                  <span
-                    className="w-2.5 h-2.5 rounded-full shrink-0"
-                    style={{ backgroundColor: COLORS[i] }}
-                  />
-                  <span className="truncate flex-1 text-muted-foreground">{p.name}</span>
-                  <span>{p.vendas} un</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Bottom section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Pending orders */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
+          <CardHeader className="pb-2">
             <CardTitle className="text-[15px] flex items-center gap-2">
               <Clock className="w-4 h-4" />
               Pedidos Pendentes
@@ -248,9 +187,8 @@ export function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Alerts */}
         <Card>
-          <CardHeader>
+          <CardHeader className="pb-2">
             <CardTitle className="text-[15px] flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-500" />
               Estoque Baixo
@@ -265,46 +203,17 @@ export function DashboardPage() {
               <div className="space-y-3">
                 {lowStockProducts.map((p) => (
                   <div key={p.id} className="flex items-center gap-3">
-                    <div className={`w-2 h-2 rounded-full shrink-0 ${p.stock === 0 ? "bg-destructive" : "bg-amber-400"}`} />
+                    <div className={`w-2 h-2 rounded-full shrink-0 ${p.stock_quantity === 0 ? "bg-destructive" : "bg-amber-400"}`} />
                     <div className="flex-1 min-w-0">
                       <p className="text-[13px] truncate">{p.name}</p>
-                      <p className="text-[11px] text-muted-foreground">{p.category}</p>
                     </div>
-                    <span className={`text-[12px] ${p.stock <= 3 ? "text-destructive" : "text-amber-600"}`}>
-                      {p.stock} {p.unitType}
+                    <span className={`text-[12px] ${p.stock_quantity <= 3 ? "text-destructive" : "text-amber-600"}`}>
+                      {p.stock_quantity} un
                     </span>
                   </div>
                 ))}
               </div>
             )}
-          </CardContent>
-
-          {/* Neighborhood stats */}
-          <CardHeader className="pt-0">
-            <CardTitle className="text-[15px] flex items-center gap-2">
-              <UserPlus className="w-4 h-4" />
-              Pedidos por Bairro
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {neighborhoodData.map((n) => (
-                <div key={n.name} className="flex items-center gap-2">
-                  <span className="text-[12px] text-muted-foreground w-28 truncate">
-                    {n.name}
-                  </span>
-                  <div className="flex-1 bg-accent rounded-full h-2">
-                    <div
-                      className="bg-primary rounded-full h-2 transition-all"
-                      style={{
-                        width: `${(n.pedidos / Math.max(...neighborhoodData.map((nn) => nn.pedidos))) * 100}%`,
-                      }}
-                    />
-                  </div>
-                  <span className="text-[12px] w-6 text-right">{n.pedidos}</span>
-                </div>
-              ))}
-            </div>
           </CardContent>
         </Card>
       </div>

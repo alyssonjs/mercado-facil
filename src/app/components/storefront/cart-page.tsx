@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import {
   ShoppingCart,
   Plus,
@@ -12,12 +12,17 @@ import { Button } from "../ui/button";
 import { Card, CardContent } from "../ui/card";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import { useCart } from "./cart-context";
-import { storeSettings, formatCurrency } from "../../data/mock-data";
+import { useStorefront } from "./storefront-context";
+import { formatCurrency } from "../../lib/format";
 
 export function CartPage() {
+  const { slug } = useParams<{ slug: string }>();
+  const { data: storefrontData } = useStorefront();
   const { items, removeItem, updateQuantity, subtotal, clearCart } = useCart();
   const navigate = useNavigate();
-  const minimumOrder = storeSettings.minimumOrderCents / 100;
+  const minimumOrderCents = (storefrontData?.settings?.minimum_order_cents as number) ?? 3000;
+  const minimumOrder = minimumOrderCents / 100;
+  const storeSlug = slug ?? storefrontData?.store?.slug ?? "";
   const meetsMinimum = subtotal >= minimumOrder;
 
   if (items.length === 0) {
@@ -30,7 +35,7 @@ export function CartPage() {
         <p className="text-[14px] text-muted-foreground mb-6">
           Adicione produtos para comecar seu pedido
         </p>
-        <Button onClick={() => navigate(`/loja/${storeSettings.slug}`)} className="gap-2">
+        <Button onClick={() => navigate(`/loja/${storeSlug}`)} className="gap-2">
           <ArrowLeft className="w-4 h-4" />
           Ver Produtos
         </Button>
@@ -42,7 +47,7 @@ export function CartPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <button
-          onClick={() => navigate(`/loja/${storeSettings.slug}`)}
+          onClick={() => navigate(`/loja/${storeSlug}`)}
           className="p-2 rounded-lg hover:bg-accent"
         >
           <ArrowLeft className="w-5 h-5" />
@@ -189,7 +194,7 @@ export function CartPage() {
               <Button
                 className="w-full gap-2"
                 disabled={!meetsMinimum}
-                onClick={() => navigate(`/loja/${storeSettings.slug}/checkout`)}
+                onClick={() => navigate(`/loja/${storeSlug}/checkout`)}
               >
                 Ir para Checkout
                 <ArrowRight className="w-4 h-4" />
@@ -198,7 +203,7 @@ export function CartPage() {
               <Button
                 variant="outline"
                 className="w-full"
-                onClick={() => navigate(`/loja/${storeSettings.slug}`)}
+                onClick={() => navigate(`/loja/${storeSlug}`)}
               >
                 Continuar Comprando
               </Button>

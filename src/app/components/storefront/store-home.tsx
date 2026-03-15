@@ -7,7 +7,6 @@ import {
   Star,
   Clock,
   Truck,
-  MapPin,
   ShoppingCart,
   UtensilsCrossed,
 } from "lucide-react";
@@ -17,15 +16,10 @@ import { Badge } from "../ui/badge";
 import { Card, CardContent } from "../ui/card";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import { useCart } from "./cart-context";
-import {
-  products as mockProducts,
-  categories as mockCategories,
-  storeSettings,
-  neighborhoods,
-  formatCurrency,
-  type Product,
-} from "../../data/mock-data";
+import { formatCurrency } from "../../lib/format";
+import type { Product } from "../../lib/types";
 import { hasApi, storefront } from "../../lib/api";
+import { useStorefront } from "./storefront-context";
 
 function ProductCard({ product }: { product: Product }) {
   const { items, addItem, updateQuantity, removeItem } = useCart();
@@ -140,38 +134,36 @@ function mapApiProductToProduct(p: {
 
 export function StoreHome() {
   const { slug } = useParams<{ slug: string }>();
+  const { data: storefrontData } = useStorefront();
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [apiProducts, setApiProducts] = useState<Product[]>([]);
   const [apiCategories, setApiCategories] = useState<string[]>([]);
-  const [apiStoreData, setApiStoreData] = useState<{ store: { name: string; address: string }; settings: Record<string, unknown> } | null>(null);
 
   useEffect(() => {
     if (!hasApi() || !slug) return;
     Promise.all([
-      storefront.get(slug),
       storefront.categories(slug),
       storefront.products(slug),
-    ]).then(([storeData, cats, prods]) => {
-      setApiStoreData(storeData);
+    ]).then(([cats, prods]) => {
       setApiCategories(cats.map((c) => c.name));
       setApiProducts(prods.map(mapApiProductToProduct));
     }).catch(() => {});
   }, [slug]);
 
-  const products = hasApi() && slug ? apiProducts : mockProducts;
-  const categories = hasApi() && apiCategories.length > 0 ? apiCategories : mockCategories;
-  const displaySettings = apiStoreData
+  const products = apiProducts;
+  const categories = apiCategories;
+  const displaySettings = storefrontData
     ? {
-        name: apiStoreData.store.name,
-        address: apiStoreData.store.address,
-        openingHours: (apiStoreData.settings.opening_hours as string) ?? storeSettings.openingHours,
-        closingHours: (apiStoreData.settings.closing_hours as string) ?? storeSettings.closingHours,
-        deliveryTimeMinutes: (apiStoreData.settings.delivery_time_minutes as number) ?? storeSettings.deliveryTimeMinutes,
-        minimumOrderCents: (apiStoreData.settings.minimum_order_cents as number) ?? storeSettings.minimumOrderCents,
-        bannerUrl: (apiStoreData.settings.banner_url as string) ?? storeSettings.bannerUrl,
+        name: storefrontData.store.name,
+        address: storefrontData.store.address,
+        openingHours: (storefrontData.settings.opening_hours as string) ?? "",
+        closingHours: (storefrontData.settings.closing_hours as string) ?? "",
+        deliveryTimeMinutes: (storefrontData.settings.delivery_time_minutes as number) ?? 40,
+        minimumOrderCents: (storefrontData.settings.minimum_order_cents as number) ?? 3000,
+        bannerUrl: (storefrontData.settings.banner_url as string) ?? "",
       }
-    : storeSettings;
+    : { name: "Loja", address: "", openingHours: "", closingHours: "", deliveryTimeMinutes: 40, minimumOrderCents: 3000, bannerUrl: "" };
 
   const activeProducts = products.filter((p) => p.active && p.stock > 0);
   const featuredProducts = activeProducts.filter((p) => p.featured);
@@ -182,8 +174,6 @@ export function StoreHome() {
     const matchCategory = !selectedCategory || p.category === selectedCategory;
     return matchSearch && matchCategory;
   });
-
-  const activeNeighborhoods = neighborhoods.filter((n) => n.active);
 
   const categoryIcons: Record<string, string> = {
     Frutas: "🍎",
@@ -344,26 +334,6 @@ export function StoreHome() {
         </div>
       )}
 
-      {/* Delivery areas */}
-      {!search && !selectedCategory && (
-        <div className="bg-white rounded-xl border border-gray-200 p-5">
-          <h3 className="text-[14px] flex items-center gap-2 mb-3">
-            <MapPin className="w-4 h-4 text-primary" />
-            Areas de Entrega
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-            {activeNeighborhoods.map((n) => (
-              <div
-                key={n.id}
-                className="flex items-center justify-between py-2 px-3 rounded-lg bg-accent/30 text-[13px]"
-              >
-                <span>{n.name}</span>
-                <span className="text-primary">{formatCurrency(n.deliveryFee)}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

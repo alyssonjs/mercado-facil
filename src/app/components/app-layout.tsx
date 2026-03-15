@@ -21,7 +21,6 @@ import {
 import { useState, useEffect } from "react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
-import { storeSettings } from "../data/mock-data";
 import { useAuth } from "../lib/auth";
 
 const navItems = [
@@ -45,7 +44,7 @@ export function AppLayout() {
     if (hasApi && !loading && !token) navigate("/login", { replace: true });
   }, [hasApi, loading, token, navigate]);
 
-  const storeName = (hasApi && store?.name) ? store.name : storeSettings.name;
+  const storeName = store?.name ?? "Loja";
 
   if (hasApi && loading) {
     return (
@@ -118,7 +117,7 @@ export function AppLayout() {
           {/* Public store link */}
           <div className="pt-3 mt-3 border-t border-border">
             <NavLink
-              to={`/loja/${store?.slug ?? storeSettings.slug}`}
+              to={store?.slug ? `/loja/${store.slug}` : "/"}
               onClick={() => setSidebarOpen(false)}
               className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[14px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
             >

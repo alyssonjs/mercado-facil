@@ -1,35 +1,22 @@
-import { useState, useEffect } from "react";
 import { Outlet, Link, useNavigate, useParams } from "react-router";
 import { ShoppingCart, Clock, MapPin, Phone, ShoppingBag } from "lucide-react";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { useCart, CartProvider } from "./cart-context";
-import { storeSettings } from "../../data/mock-data";
-import { hasApi, storefront } from "../../lib/api";
-
-type StoreData = {
-  store: { name: string; slug: string; phone: string; address: string };
-  settings: { opening_hours?: string; closing_hours?: string };
-} | null;
+import { useStorefront, StorefrontProvider } from "./storefront-context";
 
 function StoreHeader() {
   const { slug } = useParams<{ slug: string }>();
   const { itemCount, subtotal } = useCart();
   const navigate = useNavigate();
-  const [storeData, setStoreData] = useState<StoreData>(null);
+  const { data: storeData } = useStorefront();
 
-  useEffect(() => {
-    if (hasApi() && slug) {
-      storefront.get(slug).then(setStoreData).catch(() => setStoreData(null));
-    }
-  }, [slug]);
-
-  const name = storeData?.store?.name ?? storeSettings.name;
-  const storeSlug = storeData?.store?.slug ?? storeSettings.slug;
-  const phone = storeData?.store?.phone ?? storeSettings.phone;
-  const address = storeData?.store?.address ?? storeSettings.address;
-  const openingHours = (storeData?.settings?.opening_hours as string) ?? storeSettings.openingHours;
-  const closingHours = (storeData?.settings?.closing_hours as string) ?? storeSettings.closingHours;
+  const name = storeData?.store?.name ?? "Loja";
+  const storeSlug = storeData?.store?.slug ?? slug ?? "";
+  const phone = storeData?.store?.phone ?? "";
+  const address = storeData?.store?.address ?? "";
+  const openingHours = (storeData?.settings?.opening_hours as string) ?? "";
+  const closingHours = (storeData?.settings?.closing_hours as string) ?? "";
 
   return (
     <>
@@ -117,11 +104,14 @@ function StoreHeader() {
 }
 
 export function StoreLayout() {
+  const { slug } = useParams<{ slug: string }>();
   return (
     <CartProvider>
-      <div className="min-h-screen bg-gray-50">
-        <StoreHeader />
-      </div>
+      <StorefrontProvider slug={slug}>
+        <div className="min-h-screen bg-gray-50">
+          <StoreHeader />
+        </div>
+      </StorefrontProvider>
     </CartProvider>
   );
 }

@@ -13,7 +13,6 @@ import {
 } from "./ui/dialog";
 import { Label } from "./ui/label";
 import { Switch } from "./ui/switch";
-import { categories as initialCategories, products as mockProducts } from "../data/mock-data";
 import { hasApi, categories as apiCategories, products as apiProducts } from "../lib/api";
 
 interface Category {
@@ -23,13 +22,7 @@ interface Category {
 }
 
 export function CategoriesPage() {
-  const [categoriesList, setCategoriesList] = useState<Category[]>(
-    initialCategories.map((name, i) => ({
-      id: `cat${i}`,
-      name,
-      active: true,
-    }))
-  );
+  const [categoriesList, setCategoriesList] = useState<Category[]>([]);
   const [productCountByCategory, setProductCountByCategory] = useState<Record<string, number>>({});
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Category | null>(null);
@@ -131,12 +124,8 @@ export function CategoriesPage() {
     setCategoriesList((prev) => prev.filter((c) => c.id !== id));
   };
 
-  const getProductCount = (categoryName: string) => {
-    if (hasApi() && Object.keys(productCountByCategory).length > 0) {
-      return productCountByCategory[categoryName] ?? 0;
-    }
-    return mockProducts.filter((p) => p.category === categoryName).length;
-  };
+  const getProductCount = (categoryName: string) =>
+    productCountByCategory[categoryName] ?? 0;
 
   return (
     <div className="space-y-6">

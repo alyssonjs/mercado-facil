@@ -36,13 +36,8 @@ import {
   SelectValue,
 } from "./ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
-import {
-  products as initialProducts,
-  stockMovements as initialMovements,
-  formatDateTime,
-  type Product,
-  type StockMovement,
-} from "../data/mock-data";
+import { formatDateTime } from "../lib/format";
+import type { Product, StockMovement } from "../lib/types";
 import { hasApi, products as apiProducts, inventory as apiInventory } from "../lib/api";
 
 function mapApiProductToProduct(p: {
@@ -71,8 +66,8 @@ function mapApiProductToProduct(p: {
 }
 
 export function InventoryPage() {
-  const [productsList, setProductsList] = useState<Product[]>(initialProducts);
-  const [movements, setMovements] = useState<StockMovement[]>(initialMovements);
+  const [productsList, setProductsList] = useState<Product[]>([]);
+  const [movements, setMovements] = useState<StockMovement[]>([]);
   const [search, setSearch] = useState("");
   const [adjustOpen, setAdjustOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState("");
