@@ -1,9 +1,8 @@
-import { useState } from "react";
-import { Search, Plus, Users, Phone, MapPin, Edit, Trash2 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Search, Plus, Phone, MapPin, Edit, Trash2 } from "lucide-react";
 import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
-import { Badge } from "./ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -13,18 +12,52 @@ import {
 } from "./ui/dialog";
 import { Label } from "./ui/label";
 import { customers as initialCustomers, type Customer } from "../data/mock-data";
+import { hasApi, customers as apiCustomers } from "../lib/api";
+
+function mapApiCustomerToCustomer(c: {
+  id: number;
+  name: string;
+  phone: string;
+  email: string | null;
+  address_line: string;
+  neighborhood: string;
+  notes: string | null;
+  total_orders: number;
+}): Customer {
+  return {
+    id: String(c.id),
+    name: c.name,
+    phone: c.phone,
+    email: c.email ?? undefined,
+    address: c.address_line,
+    neighborhood: c.neighborhood,
+    notes: c.notes ?? "",
+    totalOrders: c.total_orders ?? 0,
+    lastOrder: "-",
+  };
+}
 
 export function CustomersPage() {
   const [customersList, setCustomersList] = useState<Customer[]>(initialCustomers);
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Customer | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const [formName, setFormName] = useState("");
   const [formPhone, setFormPhone] = useState("");
   const [formAddress, setFormAddress] = useState("");
   const [formNeighborhood, setFormNeighborhood] = useState("");
   const [formNotes, setFormNotes] = useState("");
+
+  const loadData = () => {
+    if (!hasApi()) return;
+    apiCustomers.list().then((list) => setCustomersList(list.map(mapApiCustomerToCustomer))).catch(() => {});
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const filtered = customersList.filter(
     (c) =>
@@ -52,8 +85,32 @@ export function CustomersPage() {
     setDialogOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formName || !formPhone) return;
+    if (hasApi()) {
+      setSaving(true);
+      try {
+        const payload = {
+          name: formName,
+          phone: formPhone,
+          address_line: formAddress,
+          neighborhood: formNeighborhood,
+          notes: formNotes || null,
+        };
+        if (editing) {
+          await apiCustomers.update(Number(editing.id), payload);
+        } else {
+          await apiCustomers.create(payload);
+        }
+        loadData();
+        setDialogOpen(false);
+      } catch {
+        setSaving(false);
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     const customer: Customer = {
       id: editing?.id || `c${Date.now()}`,
       name: formName,
@@ -72,7 +129,14 @@ export function CustomersPage() {
     setDialogOpen(false);
   };
 
-  const deleteCustomer = (id: string) => {
+  const deleteCustomer = async (id: string) => {
+    if (hasApi()) {
+      try {
+        await apiCustomers.delete(Number(id));
+        loadData();
+      } catch {}
+      return;
+    }
     setCustomersList((prev) => prev.filter((c) => c.id !== id));
   };
 
@@ -187,7 +251,7 @@ export function CustomersPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSave}>Salvar</Button>
+            <Button onClick={handleSave} disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Package,
   AlertTriangle,
@@ -8,7 +8,7 @@ import {
   Plus,
   History,
 } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
@@ -43,6 +43,32 @@ import {
   type Product,
   type StockMovement,
 } from "../data/mock-data";
+import { hasApi, products as apiProducts, inventory as apiInventory } from "../lib/api";
+
+function mapApiProductToProduct(p: {
+  id: number;
+  name: string;
+  slug: string;
+  category_name: string | null;
+  stock_quantity: number;
+  minimum_stock_alert: number;
+  unit_type: string;
+}): Product {
+  return {
+    id: String(p.id),
+    name: p.name,
+    slug: p.slug,
+    category: p.category_name ?? "",
+    price: 0,
+    saleType: "unit",
+    unitType: p.unit_type ?? "un",
+    stock: p.stock_quantity,
+    minStock: p.minimum_stock_alert ?? 0,
+    active: true,
+    featured: false,
+    description: "",
+  };
+}
 
 export function InventoryPage() {
   const [productsList, setProductsList] = useState<Product[]>(initialProducts);
@@ -54,6 +80,42 @@ export function InventoryPage() {
   const [adjustQty, setAdjustQty] = useState("");
   const [adjustReason, setAdjustReason] = useState("");
   const [filter, setFilter] = useState<"all" | "low" | "zero">("all");
+  const [saving, setSaving] = useState(false);
+
+  const loadProducts = () => {
+    if (!hasApi()) return;
+    apiProducts.list().then((list) => {
+      setProductsList(list.map((p) => mapApiProductToProduct({
+        id: p.id,
+        name: p.name,
+        slug: p.slug,
+        category_name: p.category_name,
+        stock_quantity: p.stock_quantity,
+        minimum_stock_alert: p.minimum_stock_alert,
+        unit_type: p.unit_type,
+      })));
+    }).catch(() => {});
+  };
+
+  const loadMovements = () => {
+    if (!hasApi()) return;
+    apiInventory.movements().then((list) => {
+      setMovements(list.map((m) => ({
+        id: String(m.id),
+        productId: String(m.product_id),
+        productName: m.product_name,
+        type: (m.movement_type as "entrada" | "saida" | "ajuste") ?? "ajuste",
+        quantity: m.quantity,
+        reason: m.notes ?? "",
+        date: m.created_at,
+      })));
+    }).catch(() => {});
+  };
+
+  useEffect(() => {
+    loadProducts();
+    loadMovements();
+  }, []);
 
   const filtered = productsList.filter((p) => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase());
@@ -67,13 +129,31 @@ export function InventoryPage() {
   ).length;
   const zeroStockCount = productsList.filter((p) => p.stock === 0).length;
 
-  const handleAdjust = () => {
+  const handleAdjust = async () => {
     if (!selectedProduct || !adjustQty) return;
     const product = productsList.find((p) => p.id === selectedProduct);
     if (!product) return;
     const qty = parseFloat(adjustQty);
+    const apiQty = adjustType === "saida" ? -Math.abs(qty) : Math.abs(qty);
 
-    // Update product stock
+    if (hasApi()) {
+      setSaving(true);
+      try {
+        await apiInventory.adjustments(Number(selectedProduct), apiQty, adjustReason || undefined);
+        loadProducts();
+        loadMovements();
+        setAdjustOpen(false);
+        setSelectedProduct("");
+        setAdjustQty("");
+        setAdjustReason("");
+      } catch {
+        setSaving(false);
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
     setProductsList((prev) =>
       prev.map((p) => {
         if (p.id !== selectedProduct) return p;
@@ -82,12 +162,10 @@ export function InventoryPage() {
             ? p.stock + qty
             : adjustType === "saida"
             ? Math.max(0, p.stock - qty)
-            : p.stock + qty; // ajuste can be negative
+            : p.stock + qty;
         return { ...p, stock: newStock };
       })
     );
-
-    // Add movement
     const newMovement: StockMovement = {
       id: `sm${Date.now()}`,
       productId: product.id,
@@ -98,7 +176,6 @@ export function InventoryPage() {
       date: new Date().toISOString(),
     };
     setMovements((prev) => [newMovement, ...prev]);
-
     setAdjustOpen(false);
     setSelectedProduct("");
     setAdjustQty("");
@@ -395,7 +472,7 @@ export function InventoryPage() {
             <Button variant="outline" onClick={() => setAdjustOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleAdjust}>Confirmar</Button>
+            <Button onClick={handleAdjust} disabled={saving}>{saving ? "Salvando..." : "Confirmar"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

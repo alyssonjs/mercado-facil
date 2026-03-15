@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router";
 import {
   ArrowLeft,
   MapPin,
@@ -26,8 +26,10 @@ import {
   neighborhoods,
   formatCurrency,
 } from "../../data/mock-data";
+import { hasApi, storefront } from "../../lib/api";
 
 export function CheckoutPage() {
+  const { slug } = useParams<{ slug: string }>();
   const { items, subtotal, clearCart } = useCart();
   const navigate = useNavigate();
 
@@ -41,21 +43,64 @@ export function CheckoutPage() {
   const [notes, setNotes] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [orderId, setOrderId] = useState("");
+  const [confirmTotal, setConfirmTotal] = useState(0);
+  const [apiDeliveryFeeCents, setApiDeliveryFeeCents] = useState<number | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const activeNeighborhoods = neighborhoods.filter((n) => n.active);
   const neighborhood = activeNeighborhoods.find((n) => n.id === selectedNeighborhood);
-  const deliveryFee = neighborhood?.deliveryFee || 0;
+  const neighborhoodName = neighborhood?.name ?? selectedNeighborhood;
+  const deliveryFeeFromMock = neighborhood?.deliveryFee ?? 0;
+  const deliveryFee = hasApi() && slug && apiDeliveryFeeCents !== null
+    ? apiDeliveryFeeCents / 100
+    : deliveryFeeFromMock;
   const total = subtotal + deliveryFee;
+
+  useEffect(() => {
+    if (!hasApi() || !slug || !neighborhoodName) {
+      setApiDeliveryFeeCents(null);
+      return;
+    }
+    storefront.calculateDelivery(slug, neighborhoodName).then((r) => setApiDeliveryFeeCents(r.delivery_fee_cents)).catch(() => setApiDeliveryFeeCents(0));
+  }, [slug, neighborhoodName]);
 
   const canSubmit =
     name && phone && address && selectedNeighborhood && paymentMethod && items.length > 0;
 
-  const handleSubmit = () => {
+  const storeSlug = slug ?? storeSettings.slug;
+
+  const handleSubmit = async () => {
     if (!canSubmit) return;
-    const id = `ORD-${String(Math.floor(Math.random() * 9000) + 1000)}`;
-    setOrderId(id);
-    setSubmitted(true);
-    clearCart();
+    setSubmitting(true);
+    try {
+      if (hasApi() && slug) {
+        const res = await storefront.checkout(slug, {
+          name,
+          phone,
+          address: complement ? `${address}, ${complement}` : address,
+          neighborhood: neighborhoodName,
+          payment_method: paymentMethod,
+          delivery_fee_cents: Math.round(deliveryFee * 100),
+          change_for_cents: changeFor ? Math.round(parseFloat(changeFor) * 100) : undefined,
+          notes: notes || undefined,
+          items: items.map((i) => ({ product_id: Number(i.product.id), quantity: i.quantity })),
+        });
+        setOrderId(String(res.order_id));
+        setConfirmTotal(res.total_cents / 100);
+        setSubmitted(true);
+        clearCart();
+      } else {
+        const id = `ORD-${String(Math.floor(Math.random() * 9000) + 1000)}`;
+        setOrderId(id);
+        setConfirmTotal(total);
+        setSubmitted(true);
+        clearCart();
+      }
+    } catch {
+      setSubmitting(false);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   if (submitted) {
@@ -80,7 +125,7 @@ export function CheckoutPage() {
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Total</span>
-              <span className="text-primary">{formatCurrency(total)}</span>
+              <span className="text-primary">{formatCurrency(confirmTotal)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Pagamento</span>
@@ -96,7 +141,7 @@ export function CheckoutPage() {
         <div className="flex gap-3">
           <Button
             variant="outline"
-            onClick={() => navigate(`/loja/${storeSettings.slug}`)}
+            onClick={() => navigate(`/loja/${storeSlug}`)}
           >
             Voltar a Loja
           </Button>
@@ -108,8 +153,8 @@ export function CheckoutPage() {
     );
   }
 
-  if (items.length === 0) {
-    navigate(`/loja/${storeSettings.slug}/carrinho`);
+  if (items.length === 0 && !submitted) {
+    navigate(`/loja/${storeSlug}/carrinho`);
     return null;
   }
 
@@ -117,7 +162,7 @@ export function CheckoutPage() {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <button
-          onClick={() => navigate(`/loja/${storeSettings.slug}/carrinho`)}
+          onClick={() => navigate(`/loja/${storeSlug}/carrinho`)}
           className="p-2 rounded-lg hover:bg-accent"
         >
           <ArrowLeft className="w-5 h-5" />
@@ -315,9 +360,9 @@ export function CheckoutPage() {
                 className="w-full"
                 size="lg"
                 onClick={handleSubmit}
-                disabled={!canSubmit}
+                disabled={!canSubmit || submitting}
               >
-                Confirmar Pedido
+                {submitting ? "Enviando..." : "Confirmar Pedido"}
               </Button>
             </CardContent>
           </Card>

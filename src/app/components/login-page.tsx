@@ -5,16 +5,18 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Card, CardContent } from "./ui/card";
+import { useAuth } from "../lib/auth";
 
 export function LoginPage() {
   const navigate = useNavigate();
+  const { login, hasApi } = useAuth();
   const [email, setEmail] = useState("admin@mercado.com");
   const [password, setPassword] = useState("123456");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
       setError("Preencha todos os campos");
@@ -22,10 +24,21 @@ export function LoginPage() {
     }
     setLoading(true);
     setError("");
-    setTimeout(() => {
-      setLoading(false);
-      navigate("/admin");
-    }, 800);
+    if (hasApi) {
+      try {
+        await login(email, password);
+        navigate("/admin");
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Erro ao entrar");
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      setTimeout(() => {
+        setLoading(false);
+        navigate("/admin");
+      }, 800);
+    }
   };
 
   return (

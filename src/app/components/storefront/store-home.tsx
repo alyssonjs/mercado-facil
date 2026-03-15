@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useState, useEffect } from "react";
+import { useParams } from "react-router";
 import {
   Search,
   Plus,
@@ -9,7 +9,6 @@ import {
   Truck,
   MapPin,
   ShoppingCart,
-  Store,
   UtensilsCrossed,
 } from "lucide-react";
 import { Button } from "../ui/button";
@@ -19,13 +18,14 @@ import { Card, CardContent } from "../ui/card";
 import { ImageWithFallback } from "../figma/ImageWithFallback";
 import { useCart } from "./cart-context";
 import {
-  products,
-  categories,
+  products as mockProducts,
+  categories as mockCategories,
   storeSettings,
   neighborhoods,
   formatCurrency,
   type Product,
 } from "../../data/mock-data";
+import { hasApi, storefront } from "../../lib/api";
 
 function ProductCard({ product }: { product: Product }) {
   const { items, addItem, updateQuantity, removeItem } = useCart();
@@ -108,9 +108,70 @@ function ProductCard({ product }: { product: Product }) {
   );
 }
 
+function mapApiProductToProduct(p: {
+  id: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  price_cents: number;
+  sale_type: string;
+  unit_type: string;
+  stock_quantity: number;
+  featured: boolean;
+  image_url: string | null;
+  category_name: string | null;
+}): Product {
+  return {
+    id: String(p.id),
+    name: p.name,
+    slug: p.slug,
+    category: p.category_name ?? "",
+    price: p.price_cents / 100,
+    saleType: (p.sale_type === "weight" ? "weight" : "unit") as "unit" | "weight",
+    unitType: p.unit_type ?? "un",
+    stock: p.stock_quantity,
+    minStock: 0,
+    active: true,
+    featured: p.featured,
+    description: p.description ?? "",
+    imageUrl: p.image_url ?? undefined,
+  };
+}
+
 export function StoreHome() {
+  const { slug } = useParams<{ slug: string }>();
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [apiProducts, setApiProducts] = useState<Product[]>([]);
+  const [apiCategories, setApiCategories] = useState<string[]>([]);
+  const [apiStoreData, setApiStoreData] = useState<{ store: { name: string; address: string }; settings: Record<string, unknown> } | null>(null);
+
+  useEffect(() => {
+    if (!hasApi() || !slug) return;
+    Promise.all([
+      storefront.get(slug),
+      storefront.categories(slug),
+      storefront.products(slug),
+    ]).then(([storeData, cats, prods]) => {
+      setApiStoreData(storeData);
+      setApiCategories(cats.map((c) => c.name));
+      setApiProducts(prods.map(mapApiProductToProduct));
+    }).catch(() => {});
+  }, [slug]);
+
+  const products = hasApi() && slug ? apiProducts : mockProducts;
+  const categories = hasApi() && apiCategories.length > 0 ? apiCategories : mockCategories;
+  const displaySettings = apiStoreData
+    ? {
+        name: apiStoreData.store.name,
+        address: apiStoreData.store.address,
+        openingHours: (apiStoreData.settings.opening_hours as string) ?? storeSettings.openingHours,
+        closingHours: (apiStoreData.settings.closing_hours as string) ?? storeSettings.closingHours,
+        deliveryTimeMinutes: (apiStoreData.settings.delivery_time_minutes as number) ?? storeSettings.deliveryTimeMinutes,
+        minimumOrderCents: (apiStoreData.settings.minimum_order_cents as number) ?? storeSettings.minimumOrderCents,
+        bannerUrl: (apiStoreData.settings.banner_url as string) ?? storeSettings.bannerUrl,
+      }
+    : storeSettings;
 
   const activeProducts = products.filter((p) => p.active && p.stock > 0);
   const featuredProducts = activeProducts.filter((p) => p.featured);
@@ -142,8 +203,8 @@ export function StoreHome() {
       <div className="rounded-2xl overflow-hidden relative">
         <div className="h-48 sm:h-56">
           <ImageWithFallback
-            src={storeSettings.bannerUrl}
-            alt={storeSettings.name}
+            src={displaySettings.bannerUrl}
+            alt={displaySettings.name}
             className="w-full h-full object-cover"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/10" />
@@ -154,22 +215,22 @@ export function StoreHome() {
               <span className="text-2xl">🛒</span>
             </div>
             <div>
-              <h1 className="text-white">{storeSettings.name}</h1>
-              <p className="text-white/80 text-[13px]">{storeSettings.address}</p>
+              <h1 className="text-white">{displaySettings.name}</h1>
+              <p className="text-white/80 text-[13px]">{displaySettings.address}</p>
             </div>
           </div>
           <div className="flex flex-wrap gap-2 mt-3">
             <span className="flex items-center gap-1.5 bg-white/15 backdrop-blur-sm text-white px-3 py-1.5 rounded-full text-[12px] border border-white/10">
               <Clock className="w-3.5 h-3.5" />
-              {storeSettings.openingHours} - {storeSettings.closingHours}
+              {displaySettings.openingHours} - {displaySettings.closingHours}
             </span>
             <span className="flex items-center gap-1.5 bg-white/15 backdrop-blur-sm text-white px-3 py-1.5 rounded-full text-[12px] border border-white/10">
               <Truck className="w-3.5 h-3.5" />
-              ~{storeSettings.deliveryTimeMinutes} min
+              ~{displaySettings.deliveryTimeMinutes} min
             </span>
             <span className="flex items-center gap-1.5 bg-white/15 backdrop-blur-sm text-white px-3 py-1.5 rounded-full text-[12px] border border-white/10">
               <ShoppingCart className="w-3.5 h-3.5" />
-              Pedido min. {formatCurrency(storeSettings.minimumOrderCents / 100)}
+              Pedido min. {formatCurrency(displaySettings.minimumOrderCents / 100)}
             </span>
           </div>
         </div>

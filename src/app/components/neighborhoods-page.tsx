@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Edit, Trash2, MapPin } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "./ui/card";
+import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Badge } from "./ui/badge";
@@ -26,6 +26,7 @@ import {
   formatCurrency,
   type Neighborhood,
 } from "../data/mock-data";
+import { hasApi, neighborhoods as apiNeighborhoods } from "../lib/api";
 
 export function NeighborhoodsPage() {
   const [list, setList] = useState<Neighborhood[]>(initialNeighborhoods);
@@ -33,6 +34,23 @@ export function NeighborhoodsPage() {
   const [editing, setEditing] = useState<Neighborhood | null>(null);
   const [formName, setFormName] = useState("");
   const [formFee, setFormFee] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const loadData = () => {
+    if (!hasApi()) return;
+    apiNeighborhoods.list().then((data) => {
+      setList(data.map((n) => ({
+        id: String(n.id),
+        name: n.name,
+        deliveryFee: n.delivery_fee_cents / 100,
+        active: n.active ?? true,
+      })));
+    }).catch(() => {});
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const openNew = () => {
     setEditing(null);
@@ -48,8 +66,26 @@ export function NeighborhoodsPage() {
     setDialogOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formName || !formFee) return;
+    const feeCents = Math.round(parseFloat(formFee) * 100);
+    if (hasApi()) {
+      setSaving(true);
+      try {
+        if (editing) {
+          await apiNeighborhoods.update(Number(editing.id), { name: formName, delivery_fee_cents: feeCents });
+        } else {
+          await apiNeighborhoods.create({ name: formName, delivery_fee_cents: feeCents });
+        }
+        loadData();
+        setDialogOpen(false);
+      } catch {
+        setSaving(false);
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     const item: Neighborhood = {
       id: editing?.id || `n${Date.now()}`,
       name: formName,
@@ -64,13 +100,29 @@ export function NeighborhoodsPage() {
     setDialogOpen(false);
   };
 
-  const toggleActive = (id: string) => {
+  const toggleActive = async (id: string) => {
+    const n = list.find((x) => x.id === id);
+    if (!n) return;
+    if (hasApi()) {
+      try {
+        await apiNeighborhoods.update(Number(id), { active: !n.active });
+        loadData();
+      } catch {}
+      return;
+    }
     setList((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, active: !n.active } : n))
+      prev.map((x) => (x.id === id ? { ...x, active: !x.active } : x))
     );
   };
 
-  const deleteNeighborhood = (id: string) => {
+  const deleteNeighborhood = async (id: string) => {
+    if (hasApi()) {
+      try {
+        await apiNeighborhoods.delete(Number(id));
+        loadData();
+      } catch {}
+      return;
+    }
     setList((prev) => prev.filter((n) => n.id !== id));
   };
 
@@ -185,7 +237,7 @@ export function NeighborhoodsPage() {
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSave}>Salvar</Button>
+            <Button onClick={handleSave} disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

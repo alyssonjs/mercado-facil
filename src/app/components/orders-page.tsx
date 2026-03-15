@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Search,
   Plus,
   ChevronDown,
   ChevronUp,
   ShoppingCart,
-  Filter,
 } from "lucide-react";
 import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
@@ -28,8 +27,8 @@ import {
 import { Label } from "./ui/label";
 import {
   orders as initialOrders,
-  products,
-  customers,
+  products as mockProducts,
+  customers as mockCustomers,
   formatCurrency,
   formatDateTime,
   statusLabels,
@@ -38,6 +37,7 @@ import {
   type OrderStatus,
   type OrderItem,
 } from "../data/mock-data";
+import { hasApi, orders as apiOrders, products as apiProducts, customers as apiCustomers, type ApiOrder } from "../lib/api";
 
 const statusFlow: OrderStatus[] = [
   "pendente",
@@ -48,20 +48,101 @@ const statusFlow: OrderStatus[] = [
   "entregue",
 ];
 
+function mapApiOrderToOrder(o: ApiOrder): Order {
+  const items = (o.items ?? []).map((i) => ({
+    productId: "",
+    productName: i.product_name_snapshot,
+    quantity: i.quantity,
+    unitPrice: i.total_price_cents / 100 / i.quantity,
+    totalPrice: i.total_price_cents / 100,
+    unitType: i.unit_type ?? "un",
+  }));
+  return {
+    id: String(o.id),
+    customerId: String(o.customer_id),
+    customerName: o.customer_name,
+    items,
+    subtotal: o.subtotal_cents / 100,
+    deliveryFee: o.delivery_fee_cents / 100,
+    total: o.total_cents / 100,
+    paymentMethod: o.payment_method ?? "",
+    status: (o.status as OrderStatus) ?? "pendente",
+    source: (o.source === "marketplace" ? "marketplace" : "admin") as "admin" | "marketplace",
+    notes: o.notes ?? "",
+    address: "",
+    neighborhood: o.neighborhood_snapshot ?? "",
+    createdAt: o.created_at ?? new Date().toISOString(),
+  };
+}
+
 export function OrdersPage() {
   const [ordersList, setOrdersList] = useState<Order[]>(initialOrders);
+  const [orderDetails, setOrderDetails] = useState<Record<string, Order>>({});
+  const [productsList, setProductsList] = useState(mockProducts);
+  const [customersList, setCustomersList] = useState(mockCustomers);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [expandedOrder, setExpandedOrder] = useState<string | null>(null);
   const [newOrderOpen, setNewOrderOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
 
-  // New order form
   const [selectedCustomer, setSelectedCustomer] = useState("");
   const [cartItems, setCartItems] = useState<OrderItem[]>([]);
   const [selectedProduct, setSelectedProduct] = useState("");
   const [quantity, setQuantity] = useState("1");
   const [paymentMethod, setPaymentMethod] = useState("Dinheiro");
   const [orderNotes, setOrderNotes] = useState("");
+
+  const loadOrders = () => {
+    if (!hasApi()) return;
+    apiOrders.list(statusFilter === "all" ? undefined : statusFilter).then((list) => {
+      setOrdersList(list.map((o) => ({ ...mapApiOrderToOrder(o), items: [] })));
+    }).catch(() => {});
+  };
+
+  useEffect(() => {
+    loadOrders();
+  }, [statusFilter]);
+
+  useEffect(() => {
+    if (!hasApi()) return;
+    Promise.all([apiProducts.list(), apiCustomers.list()]).then(([prods, custs]) => {
+      setProductsList(prods.map((p) => ({
+        id: String(p.id),
+        name: p.name,
+        slug: p.slug,
+        category: p.category_name ?? "",
+        price: p.price_cents / 100,
+        saleType: (p.sale_type === "weight" ? "weight" : "unit") as "unit" | "weight",
+        unitType: p.unit_type ?? "un",
+        stock: p.stock_quantity,
+        minStock: p.minimum_stock_alert ?? 0,
+        active: p.active,
+        featured: p.featured,
+        description: p.description ?? "",
+      })));
+      setCustomersList(custs.map((c) => ({
+        id: String(c.id),
+        name: c.name,
+        phone: c.phone,
+        email: c.email ?? undefined,
+        address: c.address_line,
+        neighborhood: c.neighborhood,
+        complement: undefined,
+        notes: c.notes ?? "",
+        totalOrders: c.total_orders ?? 0,
+        lastOrder: "-",
+      })));
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!hasApi() || !expandedOrder) return;
+    if (orderDetails[expandedOrder]) return;
+    apiOrders.get(Number(expandedOrder)).then((o) => {
+      setOrderDetails((prev) => ({ ...prev, [expandedOrder]: mapApiOrderToOrder(o) }));
+    }).catch(() => {});
+  }, [expandedOrder]);
 
   const filtered = ordersList.filter((o) => {
     const matchSearch =
@@ -71,25 +152,41 @@ export function OrdersPage() {
     return matchSearch && matchStatus;
   });
 
-  const advanceStatus = (orderId: string) => {
+  const displayOrder = (order: Order) => orderDetails[order.id] ?? order;
+
+  const advanceStatus = async (orderId: string) => {
+    const order = ordersList.find((o) => o.id === orderId);
+    if (!order) return;
+    const currentIdx = statusFlow.indexOf(order.status);
+    if (currentIdx < 0 || currentIdx >= statusFlow.length - 1) return;
+    const nextStatus = statusFlow[currentIdx + 1];
+    if (hasApi()) {
+      try {
+        await apiOrders.changeStatus(Number(orderId), nextStatus);
+        loadOrders();
+      } catch {}
+      return;
+    }
     setOrdersList((prev) =>
-      prev.map((o) => {
-        if (o.id !== orderId) return o;
-        const currentIdx = statusFlow.indexOf(o.status);
-        if (currentIdx < 0 || currentIdx >= statusFlow.length - 1) return o;
-        return { ...o, status: statusFlow[currentIdx + 1] };
-      })
+      prev.map((o) => (o.id === orderId ? { ...o, status: nextStatus } : o))
     );
   };
 
-  const cancelOrder = (orderId: string) => {
+  const cancelOrder = async (orderId: string) => {
+    if (hasApi()) {
+      try {
+        await apiOrders.cancel(Number(orderId));
+        loadOrders();
+      } catch {}
+      return;
+    }
     setOrdersList((prev) =>
       prev.map((o) => (o.id === orderId ? { ...o, status: "cancelado" as OrderStatus } : o))
     );
   };
 
   const addToCart = () => {
-    const product = products.find((p) => p.id === selectedProduct);
+    const product = productsList.find((p) => p.id === selectedProduct);
     if (!product) return;
     const qty = parseFloat(quantity) || 1;
     const item: OrderItem = {
@@ -112,10 +209,35 @@ export function OrdersPage() {
   const cartSubtotal = cartItems.reduce((sum, item) => sum + item.totalPrice, 0);
   const deliveryFee = 5.0;
 
-  const createOrder = () => {
+  const createOrder = async () => {
     if (!selectedCustomer || cartItems.length === 0) return;
-    const customer = customers.find((c) => c.id === selectedCustomer);
+    const customer = customersList.find((c) => c.id === selectedCustomer);
     if (!customer) return;
+
+    if (hasApi()) {
+      setCreating(true);
+      try {
+        await apiOrders.create({
+          customer_id: Number(selectedCustomer),
+          source: "admin",
+          payment_method: paymentMethod,
+          delivery_fee_cents: Math.round(deliveryFee * 100),
+          notes: orderNotes || null,
+          neighborhood_snapshot: customer.neighborhood,
+          items: cartItems.map((i) => ({ product_id: Number(i.productId), quantity: i.quantity })),
+        });
+        loadOrders();
+        setNewOrderOpen(false);
+        setSelectedCustomer("");
+        setCartItems([]);
+        setOrderNotes("");
+      } catch {
+        setCreating(false);
+      } finally {
+        setCreating(false);
+      }
+      return;
+    }
 
     const newOrder: Order = {
       id: `ORD-${String(ordersList.length + 1).padStart(3, "0")}`,
@@ -133,7 +255,6 @@ export function OrdersPage() {
       neighborhood: customer.neighborhood,
       createdAt: new Date().toISOString(),
     };
-
     setOrdersList((prev) => [newOrder, ...prev]);
     setNewOrderOpen(false);
     setSelectedCustomer("");
@@ -237,7 +358,7 @@ export function OrdersPage() {
                   <div>
                     <p className="text-[12px] text-muted-foreground mb-2">Itens do pedido:</p>
                     <div className="space-y-1.5">
-                      {order.items.map((item, i) => (
+                      {(displayOrder(order).items ?? []).map((item, i) => (
                         <div key={i} className="flex justify-between text-[13px]">
                           <span>
                             {item.quantity} {item.unitType} x {item.productName}
@@ -249,15 +370,15 @@ export function OrdersPage() {
                     <div className="mt-2 pt-2 border-t border-border space-y-1">
                       <div className="flex justify-between text-[12px] text-muted-foreground">
                         <span>Subtotal</span>
-                        <span>{formatCurrency(order.subtotal)}</span>
+                        <span>{formatCurrency(displayOrder(order).subtotal)}</span>
                       </div>
                       <div className="flex justify-between text-[12px] text-muted-foreground">
                         <span>Taxa de entrega</span>
-                        <span>{formatCurrency(order.deliveryFee)}</span>
+                        <span>{formatCurrency(displayOrder(order).deliveryFee)}</span>
                       </div>
                       <div className="flex justify-between text-[14px]">
                         <span>Total</span>
-                        <span>{formatCurrency(order.total)}</span>
+                        <span>{formatCurrency(displayOrder(order).total)}</span>
                       </div>
                     </div>
                   </div>
@@ -266,16 +387,16 @@ export function OrdersPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[12px]">
                     <div>
                       <span className="text-muted-foreground">Pagamento:</span>
-                      <span className="ml-1">{order.paymentMethod}</span>
+                      <span className="ml-1">{displayOrder(order).paymentMethod}</span>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Endereco:</span>
-                      <span className="ml-1">{order.address}</span>
+                      <span className="ml-1">{displayOrder(order).address || "—"}</span>
                     </div>
-                    {order.notes && (
+                    {displayOrder(order).notes && (
                       <div>
                         <span className="text-muted-foreground">Obs:</span>
-                        <span className="ml-1">{order.notes}</span>
+                        <span className="ml-1">{displayOrder(order).notes}</span>
                       </div>
                     )}
                   </div>
@@ -316,7 +437,7 @@ export function OrdersPage() {
               <Select value={selectedCustomer} onValueChange={setSelectedCustomer}>
                 <SelectTrigger><SelectValue placeholder="Selecione o cliente" /></SelectTrigger>
                 <SelectContent>
-                  {customers.map((c) => (
+                  {customersList.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       {c.name} - {c.phone}
                     </SelectItem>
@@ -332,7 +453,7 @@ export function OrdersPage() {
                 <Select value={selectedProduct} onValueChange={setSelectedProduct}>
                   <SelectTrigger className="flex-1"><SelectValue placeholder="Produto" /></SelectTrigger>
                   <SelectContent>
-                    {products.filter((p) => p.active).map((p) => (
+                    {productsList.filter((p) => p.active).map((p) => (
                       <SelectItem key={p.id} value={p.id}>
                         {p.name} - {formatCurrency(p.price)}/{p.unitType}
                       </SelectItem>
@@ -409,8 +530,8 @@ export function OrdersPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNewOrderOpen(false)}>Cancelar</Button>
-            <Button onClick={createOrder} disabled={!selectedCustomer || cartItems.length === 0}>
-              Criar Pedido
+            <Button onClick={createOrder} disabled={!selectedCustomer || cartItems.length === 0 || creating}>
+              {creating ? "Criando..." : "Criar Pedido"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, Edit, Trash2, Tag, Package } from "lucide-react";
 import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
@@ -13,7 +13,8 @@ import {
 } from "./ui/dialog";
 import { Label } from "./ui/label";
 import { Switch } from "./ui/switch";
-import { categories as initialCategories, products } from "../data/mock-data";
+import { categories as initialCategories, products as mockProducts } from "../data/mock-data";
+import { hasApi, categories as apiCategories, products as apiProducts } from "../lib/api";
 
 interface Category {
   id: string;
@@ -29,9 +30,36 @@ export function CategoriesPage() {
       active: true,
     }))
   );
+  const [productCountByCategory, setProductCountByCategory] = useState<Record<string, number>>({});
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Category | null>(null);
   const [formName, setFormName] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const loadData = () => {
+    if (!hasApi()) return;
+    apiCategories.list().then((cats) => {
+      setCategoriesList(
+        cats.map((c) => ({
+          id: String(c.id),
+          name: c.name,
+          active: c.active ?? true,
+        }))
+      );
+    }).catch(() => {});
+    apiProducts.list().then((prods) => {
+      const count: Record<string, number> = {};
+      prods.forEach((p) => {
+        const name = p.category_name ?? "";
+        count[name] = (count[name] ?? 0) + 1;
+      });
+      setProductCountByCategory(count);
+    }).catch(() => {});
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
 
   const openNew = () => {
     setEditing(null);
@@ -45,8 +73,25 @@ export function CategoriesPage() {
     setDialogOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formName.trim()) return;
+    if (hasApi()) {
+      setSaving(true);
+      try {
+        if (editing) {
+          await apiCategories.update(Number(editing.id), { name: formName.trim() });
+        } else {
+          await apiCategories.create({ name: formName.trim() });
+        }
+        loadData();
+        setDialogOpen(false);
+      } catch {
+        setSaving(false);
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
     if (editing) {
       setCategoriesList((prev) =>
         prev.map((c) => (c.id === editing.id ? { ...c, name: formName } : c))
@@ -60,18 +105,38 @@ export function CategoriesPage() {
     setDialogOpen(false);
   };
 
-  const toggleActive = (id: string) => {
+  const toggleActive = async (id: string) => {
+    const c = categoriesList.find((x) => x.id === id);
+    if (!c) return;
+    if (hasApi()) {
+      try {
+        await apiCategories.update(Number(id), { active: !c.active });
+        loadData();
+      } catch {}
+      return;
+    }
     setCategoriesList((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, active: !c.active } : c))
+      prev.map((x) => (x.id === id ? { ...x, active: !x.active } : x))
     );
   };
 
-  const deleteCategory = (id: string) => {
+  const deleteCategory = async (id: string) => {
+    if (hasApi()) {
+      try {
+        await apiCategories.delete(Number(id));
+        loadData();
+      } catch {}
+      return;
+    }
     setCategoriesList((prev) => prev.filter((c) => c.id !== id));
   };
 
-  const getProductCount = (categoryName: string) =>
-    products.filter((p) => p.category === categoryName).length;
+  const getProductCount = (categoryName: string) => {
+    if (hasApi() && Object.keys(productCountByCategory).length > 0) {
+      return productCountByCategory[categoryName] ?? 0;
+    }
+    return mockProducts.filter((p) => p.category === categoryName).length;
+  };
 
   return (
     <div className="space-y-6">
@@ -166,7 +231,7 @@ export function CategoriesPage() {
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSave}>Salvar</Button>
+            <Button onClick={handleSave} disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

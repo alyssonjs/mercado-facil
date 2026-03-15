@@ -10,6 +10,10 @@ dist-ssr/
 .env.local
 .env.*.local
 
+# Local credentials (never commit)
+docs/credenciais-local.*
+credenciais-local.*
+
 # Logs
 npm-debug.log*
 pnpm-debug.log*

@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from "react-router";
+import { NavLink, Outlet, useNavigate } from "react-router";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -18,10 +18,11 @@ import {
   ExternalLink,
   ShoppingBag,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { storeSettings } from "../data/mock-data";
+import { useAuth } from "../lib/auth";
 
 const navItems = [
   { to: "/admin", icon: LayoutDashboard, label: "Dashboard", end: true },
@@ -37,6 +38,23 @@ const navItems = [
 
 export function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { hasApi, token, loading, store, user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (hasApi && !loading && !token) navigate("/login", { replace: true });
+  }, [hasApi, loading, token, navigate]);
+
+  const storeName = (hasApi && store?.name) ? store.name : storeSettings.name;
+
+  if (hasApi && loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <p className="text-muted-foreground">Carregando...</p>
+      </div>
+    );
+  }
+  if (hasApi && !token) return null;
 
   return (
     <div className="flex h-full min-h-screen bg-background">
@@ -61,7 +79,7 @@ export function AppLayout() {
           </div>
           <div>
             <h1 className="text-[15px] tracking-tight text-gray-900" style={{ fontFamily: "'DM Sans', sans-serif" }}>Mercado Facil</h1>
-            <p className="text-[11px] text-primary">Mercado Boa Vista</p>
+            <p className="text-[11px] text-primary">{storeName}</p>
           </div>
           <button
             className="ml-auto lg:hidden p-1"
@@ -100,7 +118,7 @@ export function AppLayout() {
           {/* Public store link */}
           <div className="pt-3 mt-3 border-t border-border">
             <NavLink
-              to={`/loja/${storeSettings.slug}`}
+              to={`/loja/${store?.slug ?? storeSettings.slug}`}
               onClick={() => setSidebarOpen(false)}
               className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-[14px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
             >
@@ -118,15 +136,22 @@ export function AppLayout() {
               JA
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] truncate">Joao Admin</p>
-              <p className="text-[11px] text-muted-foreground truncate">admin@mercado.com</p>
+              <p className="text-[13px] truncate">{user?.name ?? "Admin"}</p>
+              <p className="text-[11px] text-muted-foreground truncate">{user?.email ?? "admin@mercado.com"}</p>
             </div>
-            <NavLink
-              to="/login"
-              className="p-1.5 rounded-md hover:bg-accent text-muted-foreground"
-            >
-              <LogOut className="w-4 h-4" />
-            </NavLink>
+            {hasApi ? (
+              <button
+                type="button"
+                onClick={() => { logout(); navigate("/login"); }}
+                className="p-1.5 rounded-md hover:bg-accent text-muted-foreground"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            ) : (
+              <NavLink to="/login" className="p-1.5 rounded-md hover:bg-accent text-muted-foreground">
+                <LogOut className="w-4 h-4" />
+              </NavLink>
+            )}
           </div>
         </div>
       </aside>
@@ -153,7 +178,7 @@ export function AppLayout() {
 
           <div className="hidden sm:flex items-center gap-2 text-[13px] pl-3 border-l border-border">
             <Store className="w-4 h-4 text-primary" />
-            <span className="text-muted-foreground">{storeSettings.name}</span>
+            <span className="text-muted-foreground">{storeName}</span>
           </div>
         </header>
 
